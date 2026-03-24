@@ -27,7 +27,7 @@ jobs:
             os: macos-14
             asset_name: wcfLink-${{ github.ref_name }}-darwin-arm64.zip
           - name: macOS amd64
-            os: macos-13
+            os: macos-15-intel
             asset_name: wcfLink-${{ github.ref_name }}-darwin-amd64.zip
           - name: Windows amd64
             os: windows-latest
