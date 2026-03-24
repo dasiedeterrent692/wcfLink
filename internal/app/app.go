@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -140,6 +142,10 @@ func (a *App) SendText(ctx context.Context, accountID, toUserID, text, contextTo
 	return a.svc.SendText(ctx, accountID, toUserID, text, contextToken)
 }
 
+func (a *App) SendMedia(ctx context.Context, accountID, toUserID, mediaType, filePath, text, contextToken string) error {
+	return a.svc.SendMedia(ctx, accountID, toUserID, mediaType, filePath, text, contextToken)
+}
+
 func (a *App) LogoutAccount(ctx context.Context, accountID string) error {
 	return a.svc.LogoutAccount(ctx, accountID)
 }
@@ -257,12 +263,9 @@ func (s *service) SendText(ctx context.Context, accountID, toUserID, text, conte
 	if err != nil {
 		return err
 	}
-	if contextToken == "" {
-		if peerCtx, err := s.store.GetPeerContext(ctx, accountID, toUserID); err == nil {
-			contextToken = peerCtx.ContextToken
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
+	contextToken, err = s.resolveContextToken(ctx, accountID, toUserID, contextToken)
+	if err != nil {
+		return err
 	}
 	if strings.TrimSpace(contextToken) == "" {
 		return errors.New("context token not found for this user; current text sending only supports replying to users who have already sent a message")
@@ -272,27 +275,101 @@ func (s *service) SendText(ctx context.Context, accountID, toUserID, text, conte
 		return err
 	}
 	raw := fmt.Sprintf(`{"to_user_id":%q,"text":%q,"context_token":%q}`, toUserID, text, contextToken)
-	if err := s.store.CreateOutboundEvent(ctx, accountID, toUserID, contextToken, text, raw); err != nil {
+	if err := s.store.CreateOutboundEvent(ctx, accountID, "text", toUserID, contextToken, text, "", "", "", raw); err != nil {
 		return err
 	}
 	_ = s.store.AddLog(context.Background(), "INFO", "outbound text sent", "message", raw)
 	return nil
 }
 
+func (s *service) SendMedia(ctx context.Context, accountID, toUserID, mediaType, filePath, text, contextToken string) error {
+	account, err := s.store.GetAccount(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	contextToken, err = s.resolveContextToken(ctx, accountID, toUserID, contextToken)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(contextToken) == "" {
+		return errors.New("context token not found for this user; media sending only supports replying to users who have already sent a message")
+	}
+
+	normalizedType, uploadType, err := normalizeMediaSendType(mediaType, filePath)
+	if err != nil {
+		return err
+	}
+	uploaded, err := s.client.UploadLocalMedia(ctx, s.cfg.CDNBaseURL, account.BaseURL, account.Token, toUserID, filePath, uploadType)
+	if err != nil {
+		_ = s.store.AddLog(context.Background(), "ERROR", "media upload failed", "message", fmt.Sprintf(`{"account_id":%q,"to_user_id":%q,"file_path":%q,"err":%q}`, accountID, toUserID, filePath, err.Error()))
+		return err
+	}
+
+	fileName := filepath.Base(filePath)
+	switch normalizedType {
+	case "image":
+		err = s.client.SendImageMessage(ctx, account.BaseURL, account.Token, toUserID, contextToken, text, uploaded)
+	case "video":
+		err = s.client.SendVideoMessage(ctx, account.BaseURL, account.Token, toUserID, contextToken, text, uploaded)
+	case "file":
+		err = s.client.SendFileMessage(ctx, account.BaseURL, account.Token, toUserID, contextToken, text, fileName, uploaded)
+	case "voice":
+		err = s.client.SendVoiceMessage(ctx, account.BaseURL, account.Token, toUserID, contextToken, text, detectVoiceEncodeType(filePath), uploaded)
+	default:
+		err = fmt.Errorf("unsupported media type %q", normalizedType)
+	}
+	if err != nil {
+		_ = s.store.AddLog(context.Background(), "ERROR", "outbound media send failed", "message", fmt.Sprintf(`{"account_id":%q,"to_user_id":%q,"file_path":%q,"media_type":%q,"err":%q}`, accountID, toUserID, filePath, normalizedType, err.Error()))
+		if isAudioFilePath(filePath) {
+			return fmt.Errorf("%s发送失败：\n%s", strings.TrimPrefix(strings.ToLower(filepath.Ext(filePath)), "."), err.Error())
+		}
+		return err
+	}
+
+	mimeType := detectOutboundMIME(normalizedType, filePath)
+	raw := fmt.Sprintf(`{"to_user_id":%q,"file_path":%q,"media_type":%q,"text":%q,"context_token":%q}`, toUserID, filePath, normalizedType, text, contextToken)
+	if err := s.store.CreateOutboundEvent(ctx, accountID, normalizedType, toUserID, contextToken, text, filePath, fileName, mimeType, raw); err != nil {
+		return err
+	}
+	_ = s.store.AddLog(context.Background(), "INFO", "outbound media sent", "message", raw)
+	return nil
+}
+
 func (s *service) HandleInboundMessage(ctx context.Context, account model.Account, msg ilink.WeixinMessage) error {
-	if err := s.store.SaveInboundMessage(ctx, account.AccountID, msg); err != nil {
+	mediaPath, mediaFileName, mediaMimeType := "", "", ""
+	if mediaItem, ok := firstInboundMediaItem(msg); ok {
+		mediaBytes, suggestedFileName, mimeType, err := s.client.DownloadMessageMedia(ctx, s.cfg.CDNBaseURL, mediaItem)
+		if err != nil {
+			s.logger.Warn("download inbound media failed", "account_id", account.AccountID, "message_id", msg.MessageID, "err", err)
+			_ = s.store.AddLog(context.Background(), "ERROR", "download inbound media failed", "media", fmt.Sprintf(`{"account_id":%q,"message_id":%d,"err":%q}`, account.AccountID, msg.MessageID, err.Error()))
+		} else {
+			mediaPath, mediaFileName, mediaMimeType, err = s.saveInboundMedia(account.AccountID, msg.MessageID, msg.FromUserID, suggestedFileName, mimeType, mediaBytes)
+			if err != nil {
+				s.logger.Warn("persist inbound media failed", "account_id", account.AccountID, "message_id", msg.MessageID, "err", err)
+				_ = s.store.AddLog(context.Background(), "ERROR", "persist inbound media failed", "media", fmt.Sprintf(`{"account_id":%q,"message_id":%d,"err":%q}`, account.AccountID, msg.MessageID, err.Error()))
+				mediaPath, mediaFileName, mediaMimeType = "", "", ""
+			}
+		}
+	}
+
+	if err := s.store.SaveInboundMessage(ctx, account.AccountID, msg, mediaPath, mediaFileName, mediaMimeType); err != nil {
 		return err
 	}
 
 	payload, err := json.Marshal(map[string]any{
-		"account_id":    account.AccountID,
-		"base_url":      account.BaseURL,
-		"from_user_id":  msg.FromUserID,
-		"to_user_id":    msg.ToUserID,
-		"message_id":    msg.MessageID,
-		"context_token": msg.ContextToken,
-		"raw_message":   msg,
-		"received_at":   time.Now().UTC(),
+		"account_id":      account.AccountID,
+		"base_url":        account.BaseURL,
+		"event_type":      detectEventType(msg),
+		"body_text":       extractBodyText(msg),
+		"from_user_id":    msg.FromUserID,
+		"to_user_id":      msg.ToUserID,
+		"message_id":      msg.MessageID,
+		"context_token":   msg.ContextToken,
+		"media_path":      mediaPath,
+		"media_file_name": mediaFileName,
+		"media_mime_type": mediaMimeType,
+		"raw_message":     msg,
+		"received_at":     time.Now().UTC(),
 	})
 	if err != nil {
 		return err
@@ -316,6 +393,241 @@ func (s *service) HandleInboundMessage(ctx context.Context, account model.Accoun
 
 	go s.deliverWebhook(settings.WebhookURL, payload)
 	return s.store.AddLog(ctx, "INFO", "inbound message queued for webhook", "webhook", string(payload))
+}
+
+func (s *service) resolveContextToken(ctx context.Context, accountID, toUserID, contextToken string) (string, error) {
+	if strings.TrimSpace(contextToken) != "" {
+		return contextToken, nil
+	}
+	peerCtx, err := s.store.GetPeerContext(ctx, accountID, toUserID)
+	if err == nil {
+		return peerCtx.ContextToken, nil
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return "", err
+}
+
+func (s *service) saveInboundMedia(accountID string, messageID int64, fromUserID, fileName, mimeType string, data []byte) (string, string, string, error) {
+	if err := os.MkdirAll(s.cfg.MediaDir, 0o755); err != nil {
+		return "", "", "", err
+	}
+	now := time.Now()
+	dir := filepath.Join(s.cfg.MediaDir, sanitizePathSegment(accountID), now.Format("2006"), now.Format("01"), now.Format("02"))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", "", "", err
+	}
+
+	safeName := sanitizeFileName(fileName)
+	if safeName == "" {
+		safeName = "media"
+	}
+	base := strings.TrimSuffix(safeName, filepath.Ext(safeName))
+	ext := filepath.Ext(safeName)
+	if ext == "" {
+		ext = extensionForMIME(mimeType)
+	}
+	if ext == "" {
+		ext = ".bin"
+	}
+
+	prefix := fmt.Sprintf("%d", messageID)
+	if messageID == 0 {
+		prefix = fmt.Sprintf("%d", now.UnixNano())
+	}
+	if fromUserID != "" {
+		prefix += "_" + sanitizePathSegment(fromUserID)
+	}
+	finalName := prefix + "_" + base + ext
+	fullPath := filepath.Join(dir, finalName)
+	if err := os.WriteFile(fullPath, data, 0o644); err != nil {
+		return "", "", "", err
+	}
+	return fullPath, finalName, mimeType, nil
+}
+
+func normalizeMediaSendType(mediaType, filePath string) (string, int, error) {
+	value := strings.ToLower(strings.TrimSpace(mediaType))
+	if value == "" {
+		switch strings.ToLower(filepath.Ext(filePath)) {
+		case ".jpg", ".jpeg", ".png", ".gif", ".webp":
+			value = "image"
+		case ".mp4", ".mov", ".m4v":
+			value = "video"
+		default:
+			value = "file"
+		}
+	}
+	switch value {
+	case "image":
+		return value, ilink.UploadMediaTypeImage, nil
+	case "video":
+		return value, ilink.UploadMediaTypeVideo, nil
+	case "file":
+		return value, ilink.UploadMediaTypeFile, nil
+	case "voice":
+		return value, ilink.UploadMediaTypeVoice, nil
+	default:
+		return "", 0, fmt.Errorf("unsupported media type %q", mediaType)
+	}
+}
+
+func firstInboundMediaItem(msg ilink.WeixinMessage) (ilink.MessageItem, bool) {
+	for _, item := range msg.ItemList {
+		switch item.Type {
+		case 2, 3, 4, 5:
+			return item, true
+		}
+	}
+	return ilink.MessageItem{}, false
+}
+
+func detectOutboundMIME(mediaType, filePath string) string {
+	switch mediaType {
+	case "image":
+		switch strings.ToLower(filepath.Ext(filePath)) {
+		case ".png":
+			return "image/png"
+		case ".gif":
+			return "image/gif"
+		default:
+			return "image/jpeg"
+		}
+	case "video":
+		return "video/mp4"
+	case "voice":
+		switch strings.ToLower(filepath.Ext(filePath)) {
+		case ".amr":
+			return "audio/amr"
+		case ".mp3":
+			return "audio/mpeg"
+		case ".ogg":
+			return "audio/ogg"
+		default:
+			return "audio/silk"
+		}
+	default:
+		return "application/octet-stream"
+	}
+}
+
+func sanitizePathSegment(value string) string {
+	replacer := strings.NewReplacer(
+		"/", "_",
+		"\\", "_",
+		":", "_",
+		"*", "_",
+		"?", "_",
+		"\"", "_",
+		"<", "_",
+		">", "_",
+		"|", "_",
+		"@", "_",
+	)
+	out := strings.TrimSpace(replacer.Replace(value))
+	if out == "" {
+		return "unknown"
+	}
+	return out
+}
+
+func sanitizeFileName(value string) string {
+	value = filepath.Base(strings.TrimSpace(value))
+	if value == "." || value == "/" || value == "" {
+		return ""
+	}
+	return sanitizePathSegment(value)
+}
+
+func extensionForMIME(mimeType string) string {
+	switch mimeType {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/gif":
+		return ".gif"
+	case "video/mp4":
+		return ".mp4"
+	case "audio/silk":
+		return ".silk"
+	case "audio/amr":
+		return ".amr"
+	case "audio/mpeg":
+		return ".mp3"
+	case "audio/ogg":
+		return ".ogg"
+	case "application/pdf":
+		return ".pdf"
+	default:
+		return ""
+	}
+}
+
+func detectVoiceEncodeType(filePath string) int {
+	switch strings.ToLower(filepath.Ext(filePath)) {
+	case ".amr":
+		return 5
+	case ".mp3":
+		return 7
+	case ".ogg":
+		return 8
+	default:
+		return 6
+	}
+}
+
+func isAudioFilePath(filePath string) bool {
+	switch strings.ToLower(filepath.Ext(filePath)) {
+	case ".silk", ".amr", ".mp3", ".ogg", ".wav", ".m4a":
+		return true
+	default:
+		return false
+	}
+}
+
+func extractBodyText(msg ilink.WeixinMessage) string {
+	for _, item := range msg.ItemList {
+		switch item.Type {
+		case 1:
+			if item.TextItem != nil {
+				return item.TextItem.Text
+			}
+		case 3:
+			if item.VoiceItem != nil && item.VoiceItem.Text != "" {
+				return item.VoiceItem.Text
+			}
+		case 2:
+			return "[image]"
+		case 4:
+			if item.FileItem != nil && item.FileItem.FileName != "" {
+				return "[file] " + item.FileItem.FileName
+			}
+			return "[file]"
+		case 5:
+			return "[video]"
+		}
+	}
+	return ""
+}
+
+func detectEventType(msg ilink.WeixinMessage) string {
+	for _, item := range msg.ItemList {
+		switch item.Type {
+		case 1:
+			return "text"
+		case 2:
+			return "image"
+		case 3:
+			return "voice"
+		case 4:
+			return "file"
+		case 5:
+			return "video"
+		}
+	}
+	return "unknown"
 }
 
 func (s *service) deliverWebhook(webhookURL string, payload []byte) {

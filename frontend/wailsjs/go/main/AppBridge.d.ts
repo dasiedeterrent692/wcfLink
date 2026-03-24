@@ -15,7 +15,11 @@ export function Logout(arg1:string):Promise<void>;
 
 export function NowBJ():Promise<string>;
 
+export function PickMediaFile():Promise<string>;
+
 export function SaveSettings(arg1:string,arg2:string):Promise<model.Settings>;
+
+export function SendMedia(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
 
 export function SendText(arg1:string,arg2:string,arg3:string):Promise<void>;
 

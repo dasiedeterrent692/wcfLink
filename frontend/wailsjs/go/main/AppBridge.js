@@ -26,8 +26,16 @@ export function NowBJ() {
   return window['go']['main']['AppBridge']['NowBJ']();
 }
 
+export function PickMediaFile() {
+  return window['go']['main']['AppBridge']['PickMediaFile']();
+}
+
 export function SaveSettings(arg1, arg2) {
   return window['go']['main']['AppBridge']['SaveSettings'](arg1, arg2);
+}
+
+export function SendMedia(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['AppBridge']['SendMedia'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function SendText(arg1, arg2, arg3) {

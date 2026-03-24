@@ -40,6 +40,9 @@ export namespace main {
 	    message_id?: number;
 	    context_token?: string;
 	    body_text?: string;
+	    media_path?: string;
+	    media_file_name?: string;
+	    media_mime_type?: string;
 	    raw_json: string;
 	    created_at: string;
 	
@@ -58,6 +61,9 @@ export namespace main {
 	        this.message_id = source["message_id"];
 	        this.context_token = source["context_token"];
 	        this.body_text = source["body_text"];
+	        this.media_path = source["media_path"];
+	        this.media_file_name = source["media_file_name"];
+	        this.media_mime_type = source["media_mime_type"];
 	        this.raw_json = source["raw_json"];
 	        this.created_at = source["created_at"];
 	    }

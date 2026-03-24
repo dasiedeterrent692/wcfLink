@@ -155,6 +155,10 @@ button.wide { width: 100%; }
   margin-bottom: 10px;
 }
 
+.media-summary-grid {
+  grid-template-columns: minmax(0, 1fr) 160px;
+}
+
 .summary-item {
   display: grid;
   gap: 8px;
@@ -190,6 +194,10 @@ button.wide { width: 100%; }
   overflow-wrap: anywhere;
 }
 
+.static-value.compact {
+  justify-content: center;
+}
+
 #sendToUserId {
   flex: 1 1 auto;
   white-space: nowrap;
@@ -223,6 +231,7 @@ textarea:disabled {
   font-size: 13px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .account-state {
@@ -369,7 +378,7 @@ textarea:disabled {
   z-index: 20;
 }
 
-.send-panel,
+.compose-panel,
 .events-panel {
   min-width: 0;
 }
@@ -404,9 +413,9 @@ textarea:disabled {
   margin-bottom: 10px;
 }
 
-.event-row header strong {
+.event-time {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--muted);
 }
 
@@ -415,6 +424,27 @@ textarea:disabled {
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.event-meta {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.event-file,
+.event-mime {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.event-file {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .pill {
@@ -445,6 +475,20 @@ textarea:disabled {
   background: rgba(255,255,255,0.7);
   color: var(--muted);
   text-align: center;
+}
+
+.button-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.button-row button {
+  flex: 1 1 0;
+}
+
+.compose-panel textarea {
+  min-height: 76px;
 }
 
 @media (max-width: 1080px) {

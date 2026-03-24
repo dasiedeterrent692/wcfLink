@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -236,7 +237,7 @@ WHERE account_id = ?`, now, now, accountID)
 	return err
 }
 
-func (s *Store) SaveInboundMessage(ctx context.Context, accountID string, msg ilink.WeixinMessage) error {
+func (s *Store) SaveInboundMessage(ctx context.Context, accountID string, msg ilink.WeixinMessage, mediaPath, mediaFileName, mediaMimeType string) error {
 	raw, err := json.Marshal(msg)
 	if err != nil {
 		return err
@@ -252,9 +253,9 @@ func (s *Store) SaveInboundMessage(ctx context.Context, accountID string, msg il
 
 	_, err = tx.ExecContext(ctx, `
 INSERT OR IGNORE INTO events (
-  account_id, direction, event_type, from_user_id, to_user_id, message_id, context_token, body_text, raw_json, created_at
-) VALUES (?, 'inbound', ?, ?, ?, ?, ?, ?, ?, ?)`,
-		accountID, detectEventType(msg), msg.FromUserID, msg.ToUserID, msg.MessageID, msg.ContextToken, bodyText, string(raw), now,
+  account_id, direction, event_type, from_user_id, to_user_id, message_id, context_token, body_text, media_path, media_file_name, media_mime_type, raw_json, created_at
+) VALUES (?, 'inbound', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		accountID, detectEventType(msg), msg.FromUserID, msg.ToUserID, msg.MessageID, msg.ContextToken, bodyText, mediaPath, mediaFileName, mediaMimeType, string(raw), now,
 	)
 	if err != nil {
 		return err
@@ -295,12 +296,12 @@ WHERE account_id = ? AND peer_user_id = ?`, accountID, peerUserID)
 	return item, nil
 }
 
-func (s *Store) CreateOutboundEvent(ctx context.Context, accountID, toUserID, contextToken, bodyText, rawJSON string) error {
+func (s *Store) CreateOutboundEvent(ctx context.Context, accountID, eventType, toUserID, contextToken, bodyText, mediaPath, mediaFileName, mediaMimeType, rawJSON string) error {
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO events (
-  account_id, direction, event_type, to_user_id, context_token, body_text, raw_json, created_at
-) VALUES (?, 'outbound', 'text', ?, ?, ?, ?, ?)`,
-		accountID, toUserID, contextToken, bodyText, rawJSON, time.Now().UTC(),
+  account_id, direction, event_type, to_user_id, context_token, body_text, media_path, media_file_name, media_mime_type, raw_json, created_at
+) VALUES (?, 'outbound', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		accountID, eventType, toUserID, contextToken, bodyText, mediaPath, mediaFileName, mediaMimeType, rawJSON, time.Now().UTC(),
 	)
 	return err
 }
@@ -343,7 +344,7 @@ func (s *Store) ListEvents(ctx context.Context, afterID int64, limit int) ([]mod
 		limit = 100
 	}
 	rows, err := s.db.QueryContext(ctx, `
-SELECT id, account_id, direction, event_type, from_user_id, to_user_id, message_id, context_token, body_text, raw_json, created_at
+SELECT id, account_id, direction, event_type, from_user_id, to_user_id, message_id, context_token, body_text, media_path, media_file_name, media_mime_type, raw_json, created_at
 FROM events
 WHERE id > ?
 ORDER BY id ASC
@@ -358,7 +359,7 @@ LIMIT ?`, afterID, limit)
 		var item model.Event
 		if err := rows.Scan(
 			&item.ID, &item.AccountID, &item.Direction, &item.EventType, &item.FromUserID, &item.ToUserID,
-			&item.MessageID, &item.ContextToken, &item.BodyText, &item.RawJSON, &item.CreatedAt,
+			&item.MessageID, &item.ContextToken, &item.BodyText, &item.MediaPath, &item.MediaFileName, &item.MediaMimeType, &item.RawJSON, &item.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -415,6 +416,9 @@ func (s *Store) migrate(ctx context.Context) error {
 			message_id INTEGER NOT NULL DEFAULT 0,
 			context_token TEXT NOT NULL DEFAULT '',
 			body_text TEXT NOT NULL DEFAULT '',
+			media_path TEXT NOT NULL DEFAULT '',
+			media_file_name TEXT NOT NULL DEFAULT '',
+			media_mime_type TEXT NOT NULL DEFAULT '',
 			raw_json TEXT NOT NULL,
 			created_at TIMESTAMP NOT NULL
 		);`,
@@ -435,6 +439,25 @@ func (s *Store) migrate(ctx context.Context) error {
 		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("migrate: %w", err)
 		}
+	}
+	for _, stmt := range []string{
+		`ALTER TABLE events ADD COLUMN media_path TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE events ADD COLUMN media_file_name TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE events ADD COLUMN media_mime_type TEXT NOT NULL DEFAULT ''`,
+	} {
+		if err := s.execMigrationCompat(ctx, stmt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) execMigrationCompat(ctx context.Context, stmt string) error {
+	if _, err := s.db.ExecContext(ctx, stmt); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+			return nil
+		}
+		return fmt.Errorf("migrate: %w", err)
 	}
 	return nil
 }

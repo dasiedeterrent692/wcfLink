@@ -12,6 +12,7 @@ import (
 const (
 	defaultListenAddr     = "127.0.0.1:17890"
 	defaultBaseURL        = "https://ilinkai.weixin.qq.com"
+	defaultCDNBaseURL     = "https://novac2c.cdn.weixin.qq.com/c2c"
 	defaultChannelVersion = "2.0.1"
 	defaultPollTimeout    = 35 * time.Second
 )
@@ -19,9 +20,11 @@ const (
 type Config struct {
 	ListenAddr     string
 	StateDir       string
+	MediaDir       string
 	DBPath         string
 	SettingsPath   string
 	DefaultBaseURL string
+	CDNBaseURL     string
 	ChannelVersion string
 	PollTimeout    time.Duration
 	LogLevelText   string
@@ -31,15 +34,18 @@ type Config struct {
 
 func Load() Config {
 	stateDir := envOrDefault("WCFLINK_STATE_DIR", defaultStateDir())
+	mediaDir := envOrDefault("WCFLINK_MEDIA_DIR", filepath.Join(stateDir, "media"))
 	dbPath := envOrDefault("WCFLINK_DB_PATH", filepath.Join(stateDir, "wcfLink.db"))
 	settingsPath := filepath.Join(stateDir, "settings.json")
 	fileSettings := loadFileSettings(settingsPath)
 	return Config{
 		ListenAddr:     envOrDefault("WCFLINK_LISTEN_ADDR", valueOrDefault(fileSettings.ListenAddr, defaultListenAddr)),
 		StateDir:       stateDir,
+		MediaDir:       mediaDir,
 		DBPath:         dbPath,
 		SettingsPath:   settingsPath,
 		DefaultBaseURL: envOrDefault("WCFLINK_BASE_URL", defaultBaseURL),
+		CDNBaseURL:     envOrDefault("WCFLINK_CDN_BASE_URL", defaultCDNBaseURL),
 		ChannelVersion: envOrDefault("WCFLINK_CHANNEL_VERSION", defaultChannelVersion),
 		PollTimeout:    envDurationOrDefault("WCFLINK_POLL_TIMEOUT", defaultPollTimeout),
 		LogLevelText:   envOrDefault("WCFLINK_LOG_LEVEL", "INFO"),

@@ -24,6 +24,7 @@ type Service interface {
 	GetSettings(ctx context.Context) (model.Settings, error)
 	UpdateSettings(ctx context.Context, settings model.Settings) (model.Settings, error)
 	SendText(ctx context.Context, accountID, toUserID, text, contextToken string) error
+	SendMedia(ctx context.Context, accountID, toUserID, mediaType, filePath, text, contextToken string) error
 }
 
 type Server struct {
@@ -48,6 +49,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("POST /api/settings", s.handleUpdateSettings)
 	mux.HandleFunc("POST /api/messages/send-text", s.handleSendText)
+	mux.HandleFunc("POST /api/messages/send-media", s.handleSendMedia)
 	return withJSONContentType(mux)
 }
 
@@ -205,7 +207,7 @@ func (s *Server) handleSendText(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.service.SendText(r.Context(), req.AccountID, req.ToUserID, req.Text, req.ContextToken); err != nil {
-		if errors.Is(err, ilinkErrNotFoundContextToken) {
+		if isContextTokenMissingError(err) {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 			return
 		}
@@ -215,7 +217,40 @@ func (s *Server) handleSendText(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-var ilinkErrNotFoundContextToken = errors.New("context token not found")
+func (s *Server) handleSendMedia(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		AccountID    string `json:"account_id"`
+		ToUserID     string `json:"to_user_id"`
+		Type         string `json:"type"`
+		FilePath     string `json:"file_path"`
+		Text         string `json:"text"`
+		ContextToken string `json:"context_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid json body"})
+		return
+	}
+	if strings.TrimSpace(req.AccountID) == "" || strings.TrimSpace(req.ToUserID) == "" || strings.TrimSpace(req.FilePath) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "account_id, to_user_id and file_path are required"})
+		return
+	}
+	if err := s.service.SendMedia(r.Context(), req.AccountID, req.ToUserID, req.Type, req.FilePath, req.Text, req.ContextToken); err != nil {
+		if isContextTokenMissingError(err) {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func isContextTokenMissingError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "context token not found")
+}
 
 func withJSONContentType(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

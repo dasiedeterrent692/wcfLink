@@ -49,6 +49,9 @@ type Event struct {
 	MessageID    int64     `json:"message_id,omitempty"`
 	ContextToken string    `json:"context_token,omitempty"`
 	BodyText     string    `json:"body_text,omitempty"`
+	MediaPath    string    `json:"media_path,omitempty"`
+	MediaFileName string   `json:"media_file_name,omitempty"`
+	MediaMimeType string   `json:"media_mime_type,omitempty"`
 	RawJSON      string    `json:"raw_json"`
 	CreatedAt    time.Time `json:"created_at"`
 }

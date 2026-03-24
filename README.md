@@ -8,18 +8,13 @@
 - iLink `getupdates` 长轮询收消息
 - 文本消息接收与落库
 - 文本消息发送
+- 图片、语音、视频、文件接收与落盘
+- 图片、视频、文件发送
 - 回调地址配置
 - 本地事件面板
-- 桌面端测试发送框
+- 桌面端文本 / 媒体测试发送
 - 本地 HTTP API
 - SQLite 本地状态存储
-
-当前仍未实现：
-
-- 图片、语音、视频、文件收发
-- WebHook 重试与死信
-- Pull 消费确认
-- 订阅推送编排
 
 ## 技术形态
 
@@ -47,12 +42,6 @@
 - Go `1.25+`
 - Node.js `20+`
 - `wails` CLI `v2`
-
-运行桌面包时不依赖：
-
-- Redis
-- PostgreSQL
-- 外部浏览器
 
 ## 快速开始
 
@@ -93,6 +82,7 @@ wails dev
 - 设置回调地址
 - 查看事件流
 - 发送测试文本消息
+- 选择本地文件发送图片、语音、视频、文件
 
 ### 后台模式构建
 
@@ -135,11 +125,12 @@ go build -o ./bin/wcfLink ./cmd/wcfLink
 
 ### 2. 发送测试消息
 
-右侧“发送测试”面板支持直接发文本：
+右侧测试面板支持直接发文本和媒体：
 
 - `账号 ID` 会在登录后自动填充
-- `目标用户 ID` 可手动输入
-- `消息内容` 输入后点击发送即可
+- `目标用户 ID` 会自动取最近一个来信用户
+- 文本消息可以直接输入后点击发送
+- 媒体消息可以选择本地文件后发送
 
 如果当前联系人已有会话上下文，发送时会自动复用本地缓存的 `context_token`。
 
@@ -172,6 +163,7 @@ go build -o ./bin/wcfLink ./cmd/wcfLink
 - `GET /api/settings`
 - `POST /api/settings`
 - `POST /api/messages/send-text`
+- `POST /api/messages/send-media`
 
 ### 发送文本消息
 
@@ -185,6 +177,26 @@ curl -s -X POST http://127.0.0.1:17890/api/messages/send-text \
   }'
 ```
 
+### 发送媒体消息
+
+```bash
+curl -s -X POST http://127.0.0.1:17890/api/messages/send-media \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "account_id": "xxx@im.bot",
+    "to_user_id": "yyy@im.wechat",
+    "type": "image",
+    "file_path": "/absolute/path/to/demo.jpg",
+    "text": "这是图片说明"
+  }'
+```
+
+说明：
+
+- `type` 支持 `image`、`video`、`file`、`voice`
+- `type` 留空时会按文件扩展名自动判断
+- 当前媒体发送和文本发送一样，仍然要求这个用户先给你发过消息，以便复用已有 `context_token`
+
 ## 配置
 
 支持环境变量：
@@ -192,7 +204,9 @@ curl -s -X POST http://127.0.0.1:17890/api/messages/send-text \
 - `WCFLINK_LISTEN_ADDR`
 - `WCFLINK_STATE_DIR`
 - `WCFLINK_DB_PATH`
+- `WCFLINK_MEDIA_DIR`
 - `WCFLINK_BASE_URL`
+- `WCFLINK_CDN_BASE_URL`
 - `WCFLINK_CHANNEL_VERSION`
 - `WCFLINK_POLL_TIMEOUT`
 - `WCFLINK_LOG_LEVEL`
@@ -218,3 +232,12 @@ curl -s -X POST http://127.0.0.1:17890/api/messages/send-text \
 - Wails 前端绑定生成
 - 桌面包产物生成
 - 扫码登录、文本接收、文本发送主链路已跑通
+- 图片、语音、视频、文件接收落盘链路已接通
+- 图片、视频、文件发送链路已接通
+
+## 媒体说明
+
+- 入站媒体默认保存到 `<state-dir>/media/`
+- 事件记录会保存媒体文件名、媒体类型和本地路径
+- 图片、视频、文件发送基于 `getuploadurl + CDN upload + sendmessage`
+- 语音接收已实现；语音发送不支持

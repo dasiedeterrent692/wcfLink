@@ -9,6 +9,8 @@ import (
 	coreapp "wcfLink/internal/app"
 	"wcfLink/internal/httpapi"
 	"wcfLink/internal/model"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type AppBridge struct {
@@ -53,6 +55,9 @@ type EventView struct {
 	MessageID    int64  `json:"message_id,omitempty"`
 	ContextToken string `json:"context_token,omitempty"`
 	BodyText     string `json:"body_text,omitempty"`
+	MediaPath    string `json:"media_path,omitempty"`
+	MediaFileName string `json:"media_file_name,omitempty"`
+	MediaMimeType string `json:"media_mime_type,omitempty"`
 	RawJSON      string `json:"raw_json"`
 	CreatedAt    string `json:"created_at"`
 }
@@ -168,6 +173,22 @@ func (a *AppBridge) SendText(accountID, toUserID, text string) error {
 	return a.core.SendText(context.Background(), accountID, toUserID, text, "")
 }
 
+func (a *AppBridge) PickMediaFile() (string, error) {
+	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select Media File",
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "Supported Media",
+				Pattern:     "*.jpg;*.jpeg;*.png;*.gif;*.webp;*.mp4;*.mov;*.m4v;*.pdf;*.doc;*.docx;*.xls;*.xlsx;*.zip;*.txt;*.silk;*.amr;*.mp3;*.ogg;*.*",
+			},
+		},
+	})
+}
+
+func (a *AppBridge) SendMedia(accountID, toUserID, mediaType, filePath, text string) error {
+	return a.core.SendMedia(context.Background(), accountID, toUserID, mediaType, filePath, text, "")
+}
+
 func (a *AppBridge) Logout(accountID string) error {
 	return a.core.LogoutAccount(context.Background(), accountID)
 }
@@ -218,6 +239,9 @@ func toEventView(in model.Event) EventView {
 		MessageID:    in.MessageID,
 		ContextToken: in.ContextToken,
 		BodyText:     in.BodyText,
+		MediaPath:    in.MediaPath,
+		MediaFileName: in.MediaFileName,
+		MediaMimeType: in.MediaMimeType,
 		RawJSON:      in.RawJSON,
 		CreatedAt:    formatTime(in.CreatedAt),
 	}

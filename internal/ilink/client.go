@@ -45,26 +45,36 @@ type TextItem struct {
 }
 
 type VoiceItem struct {
+	Media          CDNMedia `json:"media,omitempty"`
 	Text       string `json:"text,omitempty"`
 	EncodeType int    `json:"encode_type,omitempty"`
+	Playtime   int    `json:"playtime,omitempty"`
 }
 
 type FileItem struct {
+	Media    CDNMedia `json:"media,omitempty"`
 	FileName string `json:"file_name,omitempty"`
+	MD5      string `json:"md5,omitempty"`
 	Len      string `json:"len,omitempty"`
 }
 
 type CDNMedia struct {
 	EncryptQueryParam string `json:"encrypt_query_param,omitempty"`
 	AESKey            string `json:"aes_key,omitempty"`
+	EncryptType       int    `json:"encrypt_type,omitempty"`
 }
 
 type ImageItem struct {
-	Media CDNMedia `json:"media,omitempty"`
+	Media      CDNMedia `json:"media,omitempty"`
+	ThumbMedia CDNMedia `json:"thumb_media,omitempty"`
+	AESKey     string   `json:"aeskey,omitempty"`
+	MidSize    int      `json:"mid_size,omitempty"`
 }
 
 type VideoItem struct {
-	Media CDNMedia `json:"media,omitempty"`
+	Media      CDNMedia `json:"media,omitempty"`
+	ThumbMedia CDNMedia `json:"thumb_media,omitempty"`
+	VideoSize  int      `json:"video_size,omitempty"`
 }
 
 type MessageItem struct {
@@ -103,6 +113,13 @@ type SendMessageResponse struct {
 	ErrCode int    `json:"errcode,omitempty"`
 	ErrMsg  string `json:"errmsg,omitempty"`
 }
+
+const (
+	UploadMediaTypeImage = 1
+	UploadMediaTypeVideo = 2
+	UploadMediaTypeFile  = 3
+	UploadMediaTypeVoice = 4
+)
 
 func (c *Client) FetchQRCode(ctx context.Context, baseURL string) (QRCodeResponse, error) {
 	u, err := url.Parse(strings.TrimRight(baseURL, "/") + "/ilink/bot/get_bot_qrcode?bot_type=3")
